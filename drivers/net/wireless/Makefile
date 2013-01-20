@@ -61,8 +61,8 @@ obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
 obj-$(CONFIG_BCMDHD)	+= bcmdhd/
 
-obj-$(CONFIG_BCM4334)   += bcmdhd/
-obj-$(CONFIG_BCM4334)   += btlock/
+obj-$(CONFIG_BCMDHD_SAMSUNG)	+= bcmdhd_samsung/
+obj-$(CONFIG_BCMDHD_SAMSUNG)	+= btlock/
 
 obj-$(CONFIG_BRCMFMAC)	+= brcm80211/
 obj-$(CONFIG_BRCMSMAC)	+= brcm80211/
