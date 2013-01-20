@@ -48,7 +48,7 @@ static struct gpiomux_setting spi_suspended_config2 = {
 static struct gpiomux_setting gsbi3_suspended_cfg = {
 	.func = GPIOMUX_FUNC_1,
 	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct gpiomux_setting gsbi1 = {
@@ -917,15 +917,6 @@ static struct msm_gpiomux_config msm8960_hdmi_configs[] __initdata = {
 			[GPIOMUX_SUSPENDED] = &hdmi_suspend_cfg,
 		},
 	},
-/*
-	{
-		.gpio = 15,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &hdmi_active_3_cfg,
-			[GPIOMUX_SUSPENDED] = &hdmi_suspend_cfg,
-		},
-	},
-*/
 };
 #endif
 #if defined(CONFIG_VIDEO_MHL_V1) || defined(CONFIG_VIDEO_MHL_V2)
@@ -978,13 +969,13 @@ static struct msm_gpiomux_config msm8960_mhl_configs[] __initdata = {
 static struct gpiomux_setting sec_ts_int_act_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_UP,
 };
 
 static struct gpiomux_setting sec_ts_int_sus_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_NONE,
+	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct msm_gpiomux_config msm8960_sec_ts_configs[] = {

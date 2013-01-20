@@ -29,7 +29,6 @@
 #include <linux/slimbus/slimbus.h>
 #include <linux/bootmem.h>
 #include <linux/msm_kgsl.h>
-#include <sound/a2220.h>
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
@@ -93,7 +92,7 @@
 #include <linux/i2c/gp2ap020.h>
 #endif
 #ifdef CONFIG_VP_A2220
-#include <config/vp/a2220.h>
+#include <sound/a2220.h>
 #endif
 #ifdef CONFIG_INPUT_BMP180
 #include <linux/input/bmp180.h>
@@ -1868,11 +1867,11 @@ static struct sec_bat_platform_data sec_bat_pdata = {
 	.recharge_voltage = 4280 * 1000,
 	.event_block = 600,
 	.high_block = 510,
-	.lpm_high_block = 470,
 	.high_recovery = 440,
 	.high_recovery_wpc = 490,
 	.low_block = -50,
 	.low_recovery = -10,
+	.lpm_high_block = 470,
 	.lpm_high_recovery = 440,
 	.lpm_low_block = -40,
 	.lpm_low_recovery = -10,
@@ -2756,6 +2755,25 @@ static struct platform_device a2220_i2c_gpio_device = {
 	.name			= "i2c-gpio",
 	.id			= MSM_A2220_I2C_BUS_ID,
 	.dev.platform_data	= &a2220_i2c_gpio_data,
+};
+#endif
+static struct gpiomux_setting a2220_gsbi_config = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct msm_gpiomux_config msm8960_a2220_configs[] = {
+	{
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &a2220_gsbi_config,
+		},
+	},
+	{
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &a2220_gsbi_config,
+		},
+	},
 };
 #endif
 #ifdef CONFIG_WCD9310_CODEC
@@ -4105,7 +4123,6 @@ static struct spi_board_info spi_board_info[] __initdata = {
 	},
 };
 #endif
-#endif
 static struct platform_device msm_device_saw_core0 = {
 	.name          = "saw-regulator",
 	.id            = 0,
@@ -5176,6 +5193,8 @@ static void __init gpio_rev_init(void)
 	a2220_i2c_gpio_data.sda_pin = gpio_rev(A2220_SDA);
 	a2220_i2c_gpio_data.scl_pin = gpio_rev(A2220_SCL);
 	a2220_data.gpio_wakeup = gpio_rev(A2220_WAKEUP);
+	msm8960_a2220_configs[0].gpio = gpio_rev(A2220_SDA);
+	msm8960_a2220_configs[1].gpio = gpio_rev(A2220_SCL);
 #ifdef CONFIG_VIBETONZ
 	if (system_rev >= BOARD_REV09) {
 		msm_8960_vibrator_pdata.vib_en_gpio = PMIC_GPIO_VIB_ON;
@@ -5307,9 +5326,8 @@ static int tabla_codec_ldo_en_init(void)
 			"failed\n", __func__,
 			 PM8921_GPIO_PM_TO_SYS(gpio_rev(LINEOUT_EN)));
 		return ret;
-	} else
-		gpio_direction_output(PM8921_GPIO_PM_TO_SYS(
-					gpio_rev(LINEOUT_EN)), 0);
+	}
+	gpio_direction_output(PM8921_GPIO_PM_TO_SYS(gpio_rev(LINEOUT_EN)), 0);
 	return 0;
 }
 
@@ -5389,6 +5407,11 @@ static void __init samsung_m2_vzw_init(void)
 
 #ifdef CONFIG_USB_HOST_NOTIFY
 	msm_otg_power_init();
+#endif
+#ifdef CONFIG_VP_A2220
+	if (system_rev > BOARD_REV02)
+		msm_gpiomux_install(msm8960_a2220_configs,
+			ARRAY_SIZE(msm8960_a2220_configs));
 #endif
 
 #ifdef CONFIG_USB_EHCI_MSM_HSIC
