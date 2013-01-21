@@ -51,7 +51,7 @@ static struct clk *mdp_lut_clk;
 int mdp_rev;
 int mdp_iommu_split_domain;
 u32 mdp_max_clk = 266667000;
-u64 mdp_max_bw = 2000000000;
+u64 mdp_max_bw = 2039040000;
 
 static struct platform_device *mdp_init_pdev;
 static struct regulator *footswitch;
@@ -2378,7 +2378,7 @@ int mdp_bus_scale_update_request(u64 ab, u64 ib)
 	ib = max(ib, ab);
 	mdp_bus_usecases[bus_index].vectors->ib = min(ib, mdp_max_bw);
 
-	pr_debug("%s: handle=%d index=%d ab=%llu ib=%llu\n", __func__,
+	pr_info("%s: handle=%d index=%d ab=%d ib=%d\n", __func__,
 		 (u32)mdp_bus_scale_handle, bus_index,
 		 mdp_bus_usecases[bus_index].vectors->ab,
 		 mdp_bus_usecases[bus_index].vectors->ib);
