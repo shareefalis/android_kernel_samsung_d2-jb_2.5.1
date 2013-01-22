@@ -303,6 +303,7 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 obj-$(CONFIG_MACH_M2)       += board-mms-tsp.o board-bluetooth-bcm4334.o board-8960-wifi.o board-8960-regulator.o
 obj-$(CONFIG_MACH_M2)       += board-m2-camera.o board-m2-display.o board-m2-pmic.o board-m2-storage.o 
+obj-$(CONFIG_MACH_M2_ATT)   += board-m2_att.o board-m2_att-gpiomux.o
 obj-$(CONFIG_MACH_M2_SPR)   += board-m2_spr.o board-m2_spr-gpiomux.o
 obj-$(CONFIG_MACH_M2_VZW)   += board-m2_vzw.o board-m2_vzw-gpiomux.o
 
