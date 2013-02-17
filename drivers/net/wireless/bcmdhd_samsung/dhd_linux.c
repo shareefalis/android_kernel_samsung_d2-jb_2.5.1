@@ -5718,7 +5718,8 @@ int dhd_os_check_wakelock(void *dhdp)
 
 	DHD_ERROR(("%s : wakelock_count = %d\n", __func__, dhd->wakelock_counter));
 
-	if (dhd && (dhd->wakelock_counter > 0))
+	if (dhd && (wake_lock_active(&dhd->wl_wifi) ||
+		wake_lock_active(&dhd->wl_wdwake)))
 		return 1;
 #endif /* CUSTOMER_HW4 && CONFIG_PM_SLEEP && PLATFORM_SLP */
 	return 0;
