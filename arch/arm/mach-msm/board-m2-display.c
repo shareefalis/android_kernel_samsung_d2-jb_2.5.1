@@ -22,7 +22,6 @@
 #include <mach/gpio.h>
 #include <mach/gpiomux.h>
 #include <mach/msm8960-gpio.h>
-#include <linux/ion.h>
 #include <linux/msm_ion.h>
 #include <mach/ion.h>
 
