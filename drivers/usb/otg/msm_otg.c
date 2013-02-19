@@ -3000,7 +3000,6 @@ void msm_otg_set_vbus_state(int online)
 
 	/* Ignore received BSV interrupts, if ID pin is GND */
 	pr_info("%s: %d", __func__, online);
-#if 0
 	if (!test_bit(ID, &motg->inputs)) {
 		/*
 		 * state machine work waits for initial VBUS
@@ -3012,7 +3011,6 @@ void msm_otg_set_vbus_state(int online)
 			return;
 		}
 	}
-#endif
 	if (online) {
 		if (otg->phy->state > OTG_STATE_B_IDLE) {
 			dev_info(motg->phy.dev, "msm_otg_set_vbus_state(1): on working\n");
