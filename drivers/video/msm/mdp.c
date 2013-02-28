@@ -1450,8 +1450,6 @@ u32 mdp_get_panel_framerate(struct msm_fb_data_type *mfd)
 		frame_rate = DEFAULT_FRAME_RATE;
 		pr_debug("%s frame rate=%d is default\n", __func__, frame_rate);
 	}
-	pr_debug("%s frame rate=%d total_pixel=%d, pixel_rate=%d\n", __func__,
-		frame_rate, total_pixel, pixel_rate);
 
 	return frame_rate;
 }
