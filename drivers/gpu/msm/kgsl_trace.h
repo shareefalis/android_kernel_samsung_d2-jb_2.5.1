@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -324,7 +324,7 @@ TRACE_EVENT(kgsl_mem_alloc,
 		__entry->size = mem_entry->memdesc.size;
 		__entry->tgid = mem_entry->priv->pid;
 		kgsl_get_memory_usage(__entry->usage, sizeof(__entry->usage),
-				     mem_entry->memdesc.priv);
+				     mem_entry->memdesc.flags);
 	),
 
 	TP_printk(
@@ -356,7 +356,7 @@ TRACE_EVENT(kgsl_mem_map,
 		__entry->type = mem_entry->memtype;
 		__entry->tgid = mem_entry->priv->pid;
 		kgsl_get_memory_usage(__entry->usage, sizeof(__entry->usage),
-				     mem_entry->memdesc.priv);
+				     mem_entry->memdesc.flags);
 	),
 
 	TP_printk(
@@ -388,7 +388,7 @@ TRACE_EVENT(kgsl_mem_free,
 		__entry->type = mem_entry->memtype;
 		__entry->tgid = mem_entry->priv->pid;
 		kgsl_get_memory_usage(__entry->usage, sizeof(__entry->usage),
-				     mem_entry->memdesc.priv);
+				     mem_entry->memdesc.flags);
 	),
 
 	TP_printk(
@@ -421,7 +421,7 @@ DECLARE_EVENT_CLASS(kgsl_mem_timestamp_template,
 		__entry->gpuaddr = mem_entry->memdesc.gpuaddr;
 		__entry->size = mem_entry->memdesc.size;
 		kgsl_get_memory_usage(__entry->usage, sizeof(__entry->usage),
-				     mem_entry->memdesc.priv);
+				     mem_entry->memdesc.flags);
 		__entry->drawctxt_id = id;
 		__entry->type = mem_entry->memtype;
 		__entry->curr_ts = curr_ts;
@@ -529,7 +529,7 @@ TRACE_EVENT(kgsl_mmu_pagefault,
 	),
 
 	TP_printk(
-		"d_name=%s page=0x%08x pt=%d op=%s\n",
+		"d_name=%s page=0x%08x pt=%d op=%s",
 		__get_str(device_name), __entry->page, __entry->pt,
 		__get_str(op)
 	)

@@ -35,6 +35,7 @@
 #include <asm/mach-types.h>
 #include <linux/semaphore.h>
 #include <linux/uaccess.h>
+#include <mach/event_timer.h>
 #include <mach/clk.h>
 #include "mdp.h"
 #include "msm_fb.h"
@@ -1409,49 +1410,113 @@ int mdp_ppp_pipe_wait(void)
 	if (wait == TRUE) {
 		ret = wait_for_completion_interruptible_timeout(&mdp_ppp_comp,
 								5 * HZ);
-
 		if (!ret)
 			printk(KERN_ERR "%s: Timed out waiting for the MDP.\n",
-					__func__);
+				__func__);
 	}
 
 	return ret;
 }
 
+#define MAX_VSYNC_GAP		4
 #define DEFAULT_FRAME_RATE	60
 
 u32 mdp_get_panel_framerate(struct msm_fb_data_type *mfd)
 {
-	u32 frame_rate = 0, total_pixel;
+	u32 frame_rate = 0, pixel_rate = 0, total_pixel;
 	struct msm_panel_info *panel_info = &mfd->panel_info;
+
+	pixel_rate =
+		(panel_info->type == MIPI_CMD_PANEL ||
+		 panel_info->type == MIPI_VIDEO_PANEL) ?
+		panel_info->mipi.dsi_pclk_rate :
+		panel_info->clk_rate;
+
+	if (!pixel_rate)
+		pr_warn("%s pixel rate is zero\n", __func__);
+
+	total_pixel =
+		(panel_info->lcdc.h_back_porch +
+		 panel_info->lcdc.h_front_porch +
+		 panel_info->lcdc.h_pulse_width +
+		 panel_info->xres) *
+		(panel_info->lcdc.v_back_porch +
+		 panel_info->lcdc.v_front_porch +
+		 panel_info->lcdc.v_pulse_width +
+		 panel_info->yres);
+
+	if (total_pixel)
+		frame_rate = pixel_rate / total_pixel;
+	else
+		pr_warn("%s total pixels are zero\n", __func__);
+
 	if (mfd->dest == DISPLAY_LCD) {
 		if (panel_info->type == MDDI_PANEL && panel_info->mddi.is_type1)
 			frame_rate = panel_info->lcd.refx100 / (100 * 2);
-		else
+		else if (panel_info->type != MIPI_CMD_PANEL)
 			frame_rate = panel_info->lcd.refx100 / 100;
-	} else {
-		if (panel_info->type == MIPI_VIDEO_PANEL) {
-			frame_rate = panel_info->mipi.frame_rate;
-		} else {
-			total_pixel = (panel_info->lcdc.h_back_porch +
-				  panel_info->lcdc.h_front_porch +
-				  panel_info->lcdc.h_pulse_width +
-				  panel_info->xres) *
-				 (panel_info->lcdc.v_back_porch +
-				  panel_info->lcdc.v_front_porch +
-				  panel_info->lcdc.v_pulse_width +
-				  panel_info->yres);
-			if (total_pixel)
-				frame_rate = panel_info->clk_rate /
-					total_pixel;
-		}
 	}
+
 	if (frame_rate == 0) {
 		frame_rate = DEFAULT_FRAME_RATE;
 		pr_debug("%s frame rate=%d is default\n", __func__, frame_rate);
 	}
+	pr_debug("%s frame rate=%d total_pixel=%d, pixel_rate=%d\n", __func__,
+		frame_rate, total_pixel, pixel_rate);
 
 	return frame_rate;
+}
+
+static int mdp_diff_to_next_vsync(ktime_t cur_time,
+			ktime_t last_vsync, u32 vsync_period)
+{
+	int diff_from_last, diff_to_next;
+	/*
+	 * Get interval beween last vsync and current time
+	 * Current time = CPU programming MDP for next Vsync
+	 */
+	diff_from_last =
+		(ktime_to_us(ktime_sub(cur_time, last_vsync)));
+	diff_from_last /= USEC_PER_MSEC;
+	/*
+	 * If the last Vsync occurred too long ago, skip programming
+	 * the timer
+	 */
+	if (diff_from_last < (vsync_period * MAX_VSYNC_GAP)) {
+		if (diff_from_last > vsync_period)
+			diff_to_next =
+				(diff_from_last - vsync_period) % vsync_period;
+		else
+			diff_to_next = vsync_period - diff_from_last;
+	} else {
+		/* mark it out of range */
+		diff_to_next = vsync_period + 1;
+	}
+	return diff_to_next;
+}
+
+void mdp_update_pm(struct msm_fb_data_type *mfd, ktime_t pre_vsync)
+{
+	u32 vsync_period;
+	int diff_to_next;
+	ktime_t cur_time, wakeup_time;
+
+	if (!mfd->cpu_pm_hdl)
+		return;
+	vsync_period = mfd->panel_info.frame_interval;
+	cur_time = ktime_get();
+	diff_to_next = mdp_diff_to_next_vsync(cur_time,
+					      pre_vsync,
+					      vsync_period);
+	if (diff_to_next > vsync_period)
+		return;
+	pr_debug("%s cur_time %d, pre_vsync %d, to_next %d\n",
+		 __func__,
+		 (int)ktime_to_ms(cur_time),
+		 (int)ktime_to_ms(pre_vsync),
+		 diff_to_next);
+	wakeup_time = ktime_add_ns(cur_time, diff_to_next * NSEC_PER_MSEC);
+	activate_event_timer(mfd->cpu_pm_hdl, wakeup_time);
 }
 
 static DEFINE_SPINLOCK(mdp_lock);
@@ -2186,6 +2251,12 @@ static struct platform_driver mdp_driver = {
 	},
 };
 
+static int mdp_fps_level_change(struct platform_device *pdev, u32 fps_level)
+{
+	int ret = 0;
+	ret = panel_next_fps_level_change(pdev, fps_level);
+	return ret;
+}
 static int mdp_off(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -2243,6 +2314,22 @@ static int mdp_on(struct platform_device *pdev)
 
 	pr_debug("%s:+\n", __func__);
 
+	if (!(mfd->cont_splash_done)) {
+		if (mfd->panel.type == MIPI_VIDEO_PANEL)
+			mdp4_dsi_video_splash_done();
+
+		/* Clks are enabled in probe.
+		Disabling clocks now */
+		mdp_clk_ctrl(0);
+		mfd->cont_splash_done = 1;
+	}
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+	ret = panel_next_on(pdev);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+
+
 	if (mdp_rev >= MDP_REV_40) {
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 		mdp_clk_ctrl(1);
@@ -2270,11 +2357,6 @@ static int mdp_on(struct platform_device *pdev)
 		vsync_cntrl.dev = mfd->fbi->dev;
 		atomic_set(&vsync_cntrl.suspend, 1);
 	}
-
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-
-	ret = panel_next_on(pdev);
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	mdp_histogram_ctrl_all(TRUE);
 
@@ -2538,6 +2620,7 @@ static int mdp_probe(struct platform_device *pdev)
 	int rc;
 	resource_size_t  size ;
 	unsigned long flag;
+	u32 frame_rate;
 #ifdef CONFIG_FB_MSM_MDP40
 	int intf, if_no;
 #endif
@@ -2661,6 +2744,7 @@ static int mdp_probe(struct platform_device *pdev)
 	pdata = msm_fb_dev->dev.platform_data;
 	pdata->on = mdp_on;
 	pdata->off = mdp_off;
+	pdata->fps_level_change = mdp_fps_level_change;
 	pdata->late_init = NULL;
 	pdata->next = pdev;
 
@@ -2940,6 +3024,11 @@ static int mdp_probe(struct platform_device *pdev)
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	}
 
+	frame_rate = mdp_get_panel_framerate(mfd);
+	if (frame_rate) {
+		mfd->panel_info.frame_interval = 1000 / frame_rate;
+		mfd->cpu_pm_hdl = add_event_timer(NULL, (void *)mfd);
+	}
 	mdp_clk_ctrl(0);
 
 #ifdef CONFIG_MSM_BUS_SCALING

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -70,6 +70,20 @@ static int pm_ib_enabled_get(void *data, u64 *val)
 	return 0;
 }
 
+static int pm_enabled_set(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	device->pm_dump_enable = val;
+	return 0;
+}
+
+static int pm_enabled_get(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	*val = device->pm_dump_enable;
+	return 0;
+}
+
 
 DEFINE_SIMPLE_ATTRIBUTE(pm_regs_enabled_fops,
 			pm_regs_enabled_get,
@@ -78,6 +92,10 @@ DEFINE_SIMPLE_ATTRIBUTE(pm_regs_enabled_fops,
 DEFINE_SIMPLE_ATTRIBUTE(pm_ib_enabled_fops,
 			pm_ib_enabled_get,
 			pm_ib_enabled_set, "%llu\n");
+
+DEFINE_SIMPLE_ATTRIBUTE(pm_enabled_fops,
+			pm_enabled_get,
+			pm_enabled_set, "%llu\n");
 
 static inline int kgsl_log_set(unsigned int *log_val, void *data, u64 val)
 {
@@ -105,6 +123,7 @@ KGSL_DEBUGFS_LOG(cmd_log);
 KGSL_DEBUGFS_LOG(ctxt_log);
 KGSL_DEBUGFS_LOG(mem_log);
 KGSL_DEBUGFS_LOG(pwr_log);
+KGSL_DEBUGFS_LOG(ft_log);
 
 void kgsl_device_debugfs_init(struct kgsl_device *device)
 {
@@ -120,6 +139,7 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 	device->drv_log = KGSL_LOG_LEVEL_DEFAULT;
 	device->mem_log = KGSL_LOG_LEVEL_DEFAULT;
 	device->pwr_log = KGSL_LOG_LEVEL_DEFAULT;
+	device->ft_log = KGSL_LOG_LEVEL_DEFAULT;
 
 	debugfs_create_file("log_level_cmd", 0644, device->d_debugfs, device,
 			    &cmd_log_fops);
@@ -131,6 +151,8 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 				&mem_log_fops);
 	debugfs_create_file("log_level_pwr", 0644, device->d_debugfs, device,
 				&pwr_log_fops);
+	debugfs_create_file("log_level_ft", 0644, device->d_debugfs, device,
+				&ft_log_fops);
 
 	/* Create postmortem dump control files */
 
@@ -145,6 +167,9 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 			    &pm_regs_enabled_fops);
 	debugfs_create_file("ib_enabled", 0644, pm_d_debugfs, device,
 				    &pm_ib_enabled_fops);
+	device->pm_dump_enable = 0;
+	debugfs_create_file("enable", 0644, pm_d_debugfs, device,
+				    &pm_enabled_fops);
 
 }
 
@@ -163,6 +188,16 @@ static const char *memtype_str(int memtype)
 	return "unknown";
 }
 
+static char get_alignflag(const struct kgsl_memdesc *m)
+{
+	int align = kgsl_memdesc_get_align(m);
+	if (align >= ilog2(SZ_1M))
+		return 'L';
+	else if (align >= ilog2(SZ_64K))
+		return 'l';
+	return '-';
+}
+
 static int process_mem_print(struct seq_file *s, void *unused)
 {
 	struct kgsl_mem_entry *entry;
@@ -170,7 +205,6 @@ static int process_mem_print(struct seq_file *s, void *unused)
 	struct kgsl_process_private *private = s->private;
 	char flags[4];
 	char usage[16];
-	unsigned int align;
 
 	spin_lock(&private->mem_lock);
 	seq_printf(s, "%8s %8s %5s %10s %16s %5s\n",
@@ -181,20 +215,12 @@ static int process_mem_print(struct seq_file *s, void *unused)
 		entry = rb_entry(node, struct kgsl_mem_entry, node);
 		m = &entry->memdesc;
 
-		flags[0] = m->priv & KGSL_MEMFLAGS_GLOBAL ?  'g' : '-';
-		flags[1] = m->priv & KGSL_MEMFLAGS_GPUREADONLY ? 'r' : '-';
-
-		align = (m->priv & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT;
-		if (align >= ilog2(SZ_1M))
-			flags[2] = 'L';
-		else if (align >= ilog2(SZ_64K))
-			flags[2] = 'l';
-		else
-			flags[2] = '-';
-
+		flags[0] = m->priv & KGSL_MEMDESC_GLOBAL ?  'g' : '-';
+		flags[1] = m->flags & KGSL_MEMFLAGS_GPUREADONLY ? 'r' : '-';
+		flags[2] = get_alignflag(m);
 		flags[3] = '\0';
 
-		kgsl_get_memory_usage(usage, sizeof(usage), m->priv);
+		kgsl_get_memory_usage(usage, sizeof(usage), m->flags);
 
 		seq_printf(s, "%08x %8d %5s %10s %16s %5d\n",
 			   m->gpuaddr, m->size, flags,
